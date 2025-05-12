@@ -46,7 +46,7 @@ class Image:
             et_reference_date_type=None,
             dt_source='projects/earthengine-legacy/assets/projects/usgs-ssebop/dt/daymet_median_v6',
             tcorr_source='FANO',
-            tmax_source='projects/earthengine-legacy/assets/projects/usgs-ssebop/tmax/daymet_v4_mean_1981_2010',
+            tmax_source='projects/usgs-ssebop/tmax/daymet_chelsa_mean_1981_2010',
             elr_flag=False,
             et_fraction_type='alfalfa',
             et_fraction_grass_source=None,
@@ -338,6 +338,7 @@ class Image:
             if (self.et_reference_date_type is None or
                     self.et_reference_date_type.lower() == 'daily'):
                 # Assume the collection is daily with valid system:time_start values
+
                 et_reference_coll = (
                     ee.ImageCollection(self.et_reference_source)
                     .filterDate(self._start_date, self._end_date)
@@ -600,15 +601,25 @@ class Image:
                 ee.Image.constant(float(self._tmax_source)).rename(['tmax'])
                 .set({'tmax_source': 'custom_{}'.format(self._tmax_source)})
             )
-        elif re.match(r'^projects/.+/tmax/.+_(mean|median)_\d{4}_\d{4}(_\w+)?', self._tmax_source):
+        #elif re.match(r'^projects/.+/tmax/.+_(mean|median)_\d{4}_\d{4}(_\w+)?', self._tmax_source):
             # Process Tmax source as a collection ID
             # The Tmax collections do not have a time_start so filter use the "doy" property instead
-            tmax_coll = (
-                ee.ImageCollection(self._tmax_source)
-                .filterMetadata('doy', 'equals', self._doy)
-                #.filterMetadata('doy', 'equals', self._doy.format('%03d'))
-            )
-            tmax_image = ee.Image(tmax_coll.first()).set({'tmax_source': self._tmax_source})
+            #tmax_coll = (
+            #    ee.ImageCollection(self._tmax_source)
+            #    .filterMetadata('doy', 'equals', self._doy)
+            #    #.filterMetadata('doy', 'equals', self._doy.format('%03d'))
+            #)
+            #tmax_image = ee.Image(tmax_coll.first()).set({'tmax_source': self._tmax_source})
+        elif type(self._tmax_source) is str:
+        
+            doy_string = ee.Algorithms.If(self._doy.lt(100),
+                                    ee.Algorithms.If(self._doy.lt(10),ee.String('00').cat(ee.String(self._doy)),
+                                    ee.String('0').cat(ee.String(self._doy))),ee.String(self._doy))
+
+            tmax_coll =ee.ImageCollection(self._tmax_source).filterMetadata('doy', 'equals', doy_string)
+                
+            tmax_image = ee.Image(tmax_coll.first().divide(100)).set({'tmax_source': self._tmax_source})
+        
         else:
             raise ValueError(f'Unsupported tmax_source: {self._tmax_source}\n')
 
@@ -725,7 +736,8 @@ class Image:
         if 'saturated_flag' not in cloudmask_args.keys():
             cloudmask_args['saturated_flag'] = False
 
-        cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(sr_image, **cloudmask_args)
+        #cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(sr_image, **cloudmask_args)
+        cloud_mask = openet.core.common.landsat_c2_sr_cloud_mask(sr_image)
 
         if 'c2_lst_correct' in kwargs.keys():
             assert isinstance(kwargs['c2_lst_correct'], bool), "selection type must be a boolean"
